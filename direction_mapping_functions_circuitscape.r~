@@ -1,0 +1,328 @@
+#Post-processing script for calculating circular statistics for all species range shifts
+#Inputs: One ESRI ASCII data for each species denoting the direction of expected movement
+#Written by:  Aaron Ruesch
+#Date: 7/6/2010
+
+#Description: Populates set of directions for each species movement within each cell. Calculates circular statistics on set of directions including mean, variance
+#initializeVariables <- function(animal="all") {
+
+library(CircStats)
+library(maptools)
+library(RColorBrewer)
+library(TeachingDemos)
+library(classInt)
+
+loadData <- function(
+	gcms = c("cccma_cgcm3.1_t47_run1", "cnrm-cm3_run1", "gfdl-cm2.0_run1"
+	, "gfdl-cm2.1_run1", "giss-er_run1", "inm-cm3.0_run1", "miroc3.2_medres_run1"
+	, "mri_cgcm2.3.2a_run1", "ncar_ccsm3.0_run1", "ukmo-hadcm3_run1")
+	, animal = "all"
+	, shiftType = "tot"
+	, resistance = "hii"
+	, root = "D:/Data/ruesch/asciigrids/") 
+	
+	{
+	scenario <- "a2"
+
+	ncols <- 283
+	nrows <- 269
+	npixels <- ncols * nrows
+	cellSize <<- 50000
+	
+	magnitudeMAlist <- vector("list", npixels)
+	directionMAlist <- vector("list", npixels)
+	varianceMAlist <- vector("list", npixels)
+	richnessMAlist <- vector("list", npixels)
+	movementRichnessRatioMAlist <- vector("list", npixels)
+	numberOfSpeciesTable <- data.frame()
+	
+	#need to iterate this next block for all gcms, then resummarize across gcms at end
+	for (gcm in gcms) {
+		speciesCodeList <- NULL
+		directionValuesList <- vector("list", npixels)
+		n <- rep(NA, times=npixels)
+		direction <- rep(NA, times=npixels)
+		variance <- rep(NA, times=npixels)
+		currentSpeciesRichness <- rep(0, times=npixels)
+		if (animal == "amphibs" | animal == "all") {
+			print(paste(gcm, "  :::   amphibs"))
+			animalClass <- "amphibs"
+			decade <- list.files(paste(root, animalClass, "\\", gcm, "\\", scenario, "\\", sep=""))[3]
+			directionDirectory <- paste(root, animalClass, "\\", gcm, "\\", scenario, "\\", decade, "\\", sep="")
+			setwd(directionDirectory)
+			asciiList <- list.files(pattern = paste(resistance, shiftType, sep="_"))
+			#Start Loop -- This loop populates a list where each pixel has a vector of directions associated with it
+
+			for (ascii in asciiList) {
+				print(paste(animalClass, "   :::   ", gcm, "   :::   ", scenario, "   :::   ", decade, "   :::   ", ascii, sep=""))
+				#read in ascii file, integerize, format NoData, and convert to degrees, 0 thru 360, starting at East
+				asciiData <- scan(file=ascii, what="integer", skip = 6, quiet=TRUE, na.strings = "-9999")
+				asciiData <- as.integer(asciiData)
+				angleRadians <- asciiData * (pi / 4)
+				#Find pixels where movement occurs, add one to movement count at those pixels
+				movementIndeces <- which(!is.na(asciiData))
+				if (!all(is.na(movementIndeces))) {
+					speciesCodeList[which(asciiList == ascii)] <- ascii
+				}
+				#Populate an array of movements for each pixel (formatted as list items)
+				for (movementIndex in movementIndeces) {
+					directionValuesList[[movementIndex]] <- c(directionValuesList[[movementIndex]], angleRadians[movementIndex])
+				}
+				#Find pixels where habitat occurs, add one to habitat count at those pixels (i.e. RICHNESS)
+				habitatIndeces <- which(asciiData == 2 | asciiData == 4)
+				for (habitatIndex in habitatIndeces) {
+					currentSpeciesRichness[habitatIndex] <- currentSpeciesRichness[habitatIndex] + 1
+				}
+			}
+		}
+
+		if (animal == "birds" | animal == "all") {
+			print(paste(gcm, "  :::   birds"))
+			animalClass <- "birds"
+			decade <- list.files(paste(root, animalClass, "\\", gcm, "\\", scenario, "\\", sep=""))[3]
+			directionDirectory <- paste(root, animalClass, "\\", gcm, "\\", scenario, "\\", decade, "\\", sep="")
+			setwd(directionDirectory)
+			asciiList <- list.files(pattern = paste(resistance, shiftType, sep="_"))
+
+			for (ascii in asciiList) {
+				print(paste(animalClass, "   :::   ", gcm, "   :::   ", scenario, "   :::   ", decade, "   :::   ", ascii, sep=""))
+				#read in ascii file, integerize, format NoData, and convert to degrees, 0 thru 360, starting at East
+				asciiData <- scan(file=ascii, what="integer", skip = 6, quiet=TRUE, na.strings = "-9999")
+				asciiData <- as.integer(asciiData)
+				angleRadians <- asciiData * (pi / 4)
+				#Find pixels where movement occurs, add one to movement count at those pixels
+				movementIndeces <- which(!is.na(asciiData))
+				if (!all(is.na(movementIndeces))) {
+					speciesCodeList[which(asciiList == ascii)] <- ascii
+				}
+				#Populate an array of movements for each pixel (formatted as list items)
+				for (movementIndex in movementIndeces) {
+					directionValuesList[[movementIndex]] <- c(directionValuesList[[movementIndex]], angleRadians[movementIndex])
+				}
+				#Find pixels where habitat occurs, add one to habitat count at those pixels (i.e. RICHNESS)
+				habitatIndeces <- which(asciiData == 2 | asciiData == 4)
+				for (habitatIndex in habitatIndeces) {
+					currentSpeciesRichness[habitatIndex] <- currentSpeciesRichness[habitatIndex] + 1
+				}
+			}
+		}
+
+		if (animal == "mammals" | animal == "all") {
+			print(paste(gcm, "  :::   mammals"))
+			animalClass <- "mammals"
+			decade <- list.files(paste(root, animalClass, "\\", gcm, "\\", scenario, "\\", sep=""))[3]
+			directionDirectory <- paste(root, animalClass, "\\", gcm, "\\", scenario, "\\", decade, "\\", sep="")
+			setwd(directionDirectory)
+			asciiList <- list.files(pattern = paste(resistance, shiftType, sep="_"))
+
+			for (ascii in asciiList) {
+				print(paste(animalClass, "   :::   ", gcm, "   :::   ", scenario, "   :::   ", decade, "   :::   ", ascii, sep=""))
+				#read in ascii file, integerize, format NoData, and convert to degrees, 0 thru 360, starting at East
+				asciiData <- scan(file=ascii, what="integer", skip = 6, quiet=TRUE, na.strings = "-9999")
+				asciiData <- as.integer(asciiData)
+				angleRadians <- asciiData * (pi / 4)
+				#Find pixels where movement occurs, add one to movement count at those pixels
+				movementIndeces <- which(!is.na(asciiData))
+				if (!all(is.na(movementIndeces))) {
+					speciesCodeList[which(asciiList == ascii)] <- ascii
+				}
+				#Populate an array of movements for each pixel (formatted as list items)
+				for (movementIndex in movementIndeces) {
+					directionValuesList[[movementIndex]] <- c(directionValuesList[[movementIndex]], angleRadians[movementIndex])
+				}
+				#Find pixels where habitat occurs, add one to habitat count at those pixels (i.e. RICHNESS)
+				habitatIndeces <- which(asciiData == 2 | asciiData == 4)
+				for (habitatIndex in habitatIndeces) {
+					currentSpeciesRichness[habitatIndex] <- currentSpeciesRichness[habitatIndex] + 1
+				}
+			}
+		}
+		
+		# make a table of the number of species used in the analysis per GCM
+		
+		numberOfSpeciesTableEntry <- list(gcm = gcm, numSp = length(speciesCodeList))
+		numberOfSpeciesTable <- rbind(numberOfSpeciesTable, numberOfSpeciesTableEntry)
+		
+		rm(ascii, asciiData, asciiList, directionDirectory, angleRadians, habitatIndeces
+			, habitatIndex, movementIndex, animalClass)
+		
+		#CALCULATE CIRCULAR STATISTICS
+		for (pixel in 1:npixels) {
+			if (length(directionValuesList[[pixel]]) > 0) {
+				circSummary <- NULL
+				circSummary <- circ.summary(directionValuesList[[pixel]])
+				circDispersion <- circ.disp(directionValuesList[[pixel]])
+				#directionData[[pixel]] <- c(circSummary, circDispersion[2:4])
+				n[pixel] <- circSummary$n
+				direction[pixel] <- circSummary$mean.dir
+				variance[pixel] <- circDispersion$var
+			} else {
+				#directionData[[pixel]] <- c(n = NA, mean.dir = NA, rho = NA, r = NA, rbar = NA, var = NA)
+			}
+		}
+
+		#only calculate statistics for cells that contain information (i.e. cells where movement theoretically occurs)
+		#THESE ARE THE VARIABLES AVAILABLE FOR VISUALIZATION
+
+		magnitude <- n
+		movementRichnessRatio <- magnitude / currentSpeciesRichness
+		rm(movementIndeces, circSummary, circDispersion, n, directionValuesList)
+		#summarize statistics across gcms at each pixel
+		#intermediate objects before MA summaries
+		#intermediate object for loop
+		
+		#append each gcms result to a list at each pixel
+		# MA means "Model Average"
+		
+		for (pixel in 1:npixels) {
+			magnitudeMAlist[[pixel]] <- c(magnitudeMAlist[[pixel]], magnitude[pixel])
+		}
+		for (pixel in 1:npixels) {
+			directionMAlist[[pixel]] <- c(directionMAlist[[pixel]], direction[pixel])
+		}
+		for (pixel in 1:npixels) {
+			varianceMAlist[[pixel]] <- c(varianceMAlist[[pixel]], variance[pixel])
+		}
+		for (pixel in 1:npixels) {
+			richnessMAlist[[pixel]] <- c(richnessMAlist[[pixel]], currentSpeciesRichness[pixel])
+		}
+		for (pixel in 1:npixels) {
+			movementRichnessRatioMAlist[[pixel]] <- c(movementRichnessRatioMAlist[[pixel]], movementRichnessRatio[pixel])
+		}
+	}
+	
+	# END GCM LOOP
+	
+	# write a table of the number of species in analysis for each GCM
+	write.csv(numberOfSpeciesTable, file="D:/Data/ruesch/sppMovement/speciesPerGCM.csv", row.names=FALSE)
+	
+	movementIndeces <- NULL
+	rm(currentSpeciesRichness, direction, magnitude, movementRichnessRatio, variance)
+	for (pixel in 1:npixels) {
+		# are there any non-NA data in the list at that pixel?
+		if (sum(magnitudeMAlist[[pixel]], na.rm=TRUE) > 0) {
+			movementIndeces <- c(movementIndeces, pixel)
+		}
+	}
+	npixels <- length(movementIndeces)
+	magnitudeMAlist <- magnitudeMAlist[movementIndeces]
+	directionMAlist <- directionMAlist[movementIndeces]
+	varianceMAlist <- varianceMAlist[movementIndeces]
+	richnessMAlist <- richnessMAlist[movementIndeces]
+	movementRichnessRatioMAlist <- movementRichnessRatioMAlist[movementIndeces]
+
+	#circular statistics across GCMs
+	magnitudeMA <- rep(NA, times=npixels)
+	SDmagnitudeMA <- rep(NA, times=npixels)
+	#Zrange <- rep(NA, times=npixels)
+	directionMA <- rep(NA, times=npixels)
+	varianceMA <- rep(NA, times=npixels)
+	richnessMA <- rep(NA, times=npixels)
+	movementRichnessRatioMA <- rep(NA, times=npixels)
+	
+	for (pixel in 1:npixels) {
+		circSummary <- NULL
+		circSummary <- circ.summary(directionMAlist[[pixel]][which(!is.na(directionMAlist[[pixel]]))])
+		circDispersion <- circ.disp(directionMAlist[[pixel]][which(!is.na(directionMAlist[[pixel]]))])
+
+		magnitudeMA[pixel] <- mean(magnitudeMAlist[[pixel]], na.rm=TRUE)
+		SDmagnitudeMA[pixel] <- sd(magnitudeMAlist[[pixel]], na.rm=TRUE)
+		#Zrange[pixel] <- range((max(magnitudeMAlist[[pixel]], na.rm=TRUE) - magnitudeMA[pixel]) / SDmagnitudeMA[pixel]
+		#	, (min(magnitudeMAlist[[pixel]], na.rm=TRUE) - magnitudeMA[pixel]) / SDmagnitudeMA[pixel])
+		directionMA[pixel] <- circSummary$mean.dir
+		varianceMA[pixel] <- mean(varianceMAlist[[pixel]], na.rm=TRUE)
+		richnessMA[pixel] <- mean(richnessMAlist[[pixel]], na.rm=TRUE)
+		movementRichnessRatioMA[pixel] <- mean(movementRichnessRatioMAlist[[pixel]], na.rm=TRUE)
+	}
+	
+	magnitude <<- magnitudeMA
+	SDmagnitude <<- SDmagnitudeMA
+	#Zrange <<- Zrange
+	direction <<- directionMA
+	variance <<- varianceMA
+	richness <<- richnessMA
+	movementRichnessRatio <<- movementRichnessRatioMA
+	
+	y <- scan(file="D:/Data/ruesch/sppMovement/lat.asc", what="integer", skip = 6, quiet=TRUE, na.strings = "-9999")
+	y <<- as.integer(y[movementIndeces])
+	x <- scan(file="D:/Data/ruesch/sppMovement/lon.asc", what="integer", skip = 6, quiet=TRUE, na.strings = "-9999")
+	x <<- as.integer(x[movementIndeces])
+}
+
+
+##  MAPPING FUNCTIONS
+
+#mapVectors is a function that draws vectors according to an angle
+#a variable defining the length of the vector, and a variable defining
+#the color of the variable.
+
+
+
+#mapVectors is a function that draws vectors according to an angle, a variable defining the length of the vector, and a variable defining the color of the variable.
+mapVectorsScaleArrowWidth_Classes <- function
+	(angle=direction
+	, lenVar=magnitude
+	, colorVar=1-variance
+	, scaleFactor=3
+	, arrowHeadSize=0.25
+	, arrowWidthScalar=5
+	, colorBrewerScheme="BuPu"
+	, xlim = c(-16025344, -3375344)
+	, ylim = c(-5922616, 6927384)
+	, autoBins=T
+	, colorBins=seq(0,1,by=1/6)
+	, lenBins=seq(0,20,by=10/6)
+  , boundaries = "H:/docs/UW_Data/direction_spp_movement/country_line.shp"
+	) {
+	print("begin mapping")
+
+	colorVector <- rep(NA, times=length(angle))
+	lenVector <- rep(NA, times=length(angle))
+	lwdVector <- rep(NA, times=length(angle))
+	myPallette <- brewer.pal(6, colorBrewerScheme)
+	#bin color variable into quantiles  
+  if (autoBins) {
+  	colClass <- classIntervals(colorVar, n=6, style="equal", dataPrecision=2)
+    colorVector <- findColours(colClass, myPallette)
+  	lenClass <- classIntervals(lenVar, n=6, style="fisher", dataPrecision=0)
+    lenVector <- findInterval(lenVar, lenClass$brks)
+    breaks = list(sort(unique(colClass$brks)), sort(unique(lenClass$brks)))
+  } else {
+    colorBins[7] = max(colorVar, na.rm=T)
+    colClass = classIntervals(colorVar, n=6, style="fixed", fixedBreaks=colorBins)
+    colorVector = findColours(colClass, myPallette)
+    lenBins[7] = max(lenVar, na.rm=T)
+    lenClass = classIntervals(lenVar, n=6, style="fixed", fixedBreaks=lenBins)
+    lenVector = findInterval(lenVar, lenClass$brks)
+    breaks = list(sort(unique(colClass$brks)), sort(unique(lenClass$brks)))
+  }
+	cellSizeScaleFactor <- sqrt((cellSize/2)^2 + (cellSize/2)^2)
+	x0 <- as.double(x); y0 <- as.double(y)
+	x1 <- (cos(direction) * lenVector * cellSizeScaleFactor*scaleFactor) + x0
+	y1 <- (sin(direction) * lenVector * cellSizeScaleFactor*scaleFactor) + y0
+	#sort colors so darkest colors draw last
+	arrowTable <- data.frame(colorVar=colorVar, colorVector=colorVector
+		, lenVector=lenVector, x0=x0, y0=y0, x1=x1, y1=y1)
+	arrowTableSort <- arrowTable[order(colorVar),]
+	colorVector <- as.character(arrowTableSort$colorVector)
+	lenVector <- arrowTableSort$lenVector
+	x0 <- arrowTableSort$x0
+	x1 <- arrowTableSort$x1
+	y0 <- arrowTableSort$y0
+	y1 <- arrowTableSort$y1 
+	#draw basemap
+	print("reading feature class")
+	country.map <- readShapeSpatial(boundaries)
+	print("feature class loaded")
+	# png(file=fileName, bg="transparent", width=4000, height=4000, restoreConsole=TRUE)
+	plot(country.map, col='black', xlim=xlim, ylim=ylim)
+	#draw arrows
+	for (i in 1:length(angle)) {
+		if (!any(is.na(x0[i]), is.na(y0[i]), is.na(x1[i]), is.na(y1[i]))) {
+			arrows(x0[i], y0[i], x1[i], y1[i], col=colorVector[i], lwd=lenVector[i]*arrowWidthScalar
+				, length=arrowHeadSize*lenVector[i])
+		}
+	}
+  return(breaks)
+}
+
